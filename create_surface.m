@@ -1,5 +1,5 @@
 % Run this script to detect the surface of the tissue from a file, generate
-% a heatmap and create a file with a surface representation
+% a heatmap and create a file with a surface representation.
 
 function process_oct_data()
     % Load the full z-stack volume
