@@ -1,9 +1,9 @@
 % Run this script to detect the surface of the tissue from a file, generate
-% a heatmap and create a file with a surface representation.
+% a heatmap and create a file with a surface representation
 
 function process_oct_data()
     % Load the full z-stack volume
-    filePath = 'C:\Users\Alejo\OneDrive\Escritorio\Old Code\OCTHist Code - Git Old Working File\myOCT\Diego_Files\August_Tests\Re1.tiff';
+    filePath = 'C:\Users\Alejo\OneDrive\Escritorio\Old Code\OCTHist Code - Git Old Working File\myOCT\Diego_Files\August_Tests\3D_Volume_Reconstructions\1um_Large_Scan\Data08.tif';
     [data, metadata, c] = yOCTFromTif(filePath);
     disp([newline, '-- Data loaded successfully.']);
 
@@ -32,7 +32,7 @@ function process_oct_data()
         current_slice = data(:, :, y);
 
         % Process the slice to find the surface depth
-        surface_depth(:, y) = find_surface(current_slice);
+        surface_depth(:, y) = find_surface(current_slice, z_size);
     end
 
     % Apply Gaussian smoothing to the surface depth data
@@ -61,13 +61,19 @@ function process_oct_data()
     disp([newline, '-- Visualization TIFF created and saved at ', outputFileName, ' --', newline, '-- Process completed.']);
 end
 
-function surface_column = find_surface(slice)
+function surface_column = find_surface(slice, z_size)
     x_size = size(slice, 2);
-    z_size = size(slice, 1);
+    % Conditional starting depth based on z_size
+    if z_size > 800
+        start_depth = 60;
+    else
+        start_depth = 1;
+    end
+    
     surface_column = NaN(x_size, 1);  % Initialize surface column with NaNs
 
     for x = 1:x_size
-        for z = 1:z_size
+        for z = start_depth:z_size  % Start from calculated start_depth
             if slice(z, x) >= 2
                 if z + 9 <= z_size && all(slice(z+1:z+9, x) > 0)
                     surface_column(x) = z;  % Confirm surface
@@ -150,4 +156,3 @@ function save_tiff_3d(image_data, filename)
     t.close();
     return;
 end
-
