@@ -79,7 +79,7 @@ end
 %% Process the scan
 if ~skipProcessing
     if exist(volumeOutputFolder, 'dir')  % Check if the scan data exists
-        enableCropping = false;  % Set to true to enable cropping, false to disable
+        enableCropping = true;  % Set to true to enable cropping, false to disable
         fprintf('%s Processing\n', datestr(datetime));
         outputTiffFile = [output_folder '/Image.tiff'];
         yOCTProcessTiledScan(...
