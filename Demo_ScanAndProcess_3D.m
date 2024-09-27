@@ -22,23 +22,24 @@ oct2stageXYAngleDeg = 0; % Angle between x axis of the motor and the Galvo's x a
 
 % Define z stack and z-stitching
 scanZJump_um = 5; % Use 15 microns for 10x lens, 5 microns for 40x lens
-zToScan_mm = ([-100 (-30:scanZJump_um:400)])*1e-3; %[mm]
+zToScan_mm = ((-40:scanZJump_um:250))*1e-3; %[mm]
 focusSigma = 20; %When stitching along Z axis (multiple focus points), what is the size of each focus in z [pixel], use 20 for 10x, 1 for 40x
 
 % Other scanning parameters
-tissueRefractiveIndex = 1.4; % Use either 1.33 or 1.4 depending on the results. Use 1.4 for brain.
+tissueRefractiveIndex = 1.33; % Use either 1.33 or 1.4 depending on the results. Use 1.4 for brain.
 %dispersionQuadraticTerm=6.539e07; % 10x
 %dispersionQuadraticTerm=9.56e7;   % 40x
-dispersionQuadraticTerm=-2.059e8;  % 10x, OCTP900
+dispersionQuadraticTerm=-1.466e+08;  % 10x, OCTP900
 
 % Where to save scan files
 output_folder = '\';
 
-% Set to true if you would like to process existing scan rather than scan a new one.
-skipScanning = false;
+% Set to true if you would like to skip either Scanning or Processing
+skipScanning = true;     % Skip scanning if set to true
+skipProcessing = false;  % Skip processing if set to true
 
 % If depth of focus position is known, write it here. If you would like the script to help you keep empty
-focusPositionInImageZpix = [];
+focusPositionInImageZpix = [393];
 
 %% Compute scanning parameters
 
@@ -76,13 +77,23 @@ if isempty(focusPositionInImageZpix)
 end
 	
 %% Process the scan
-fprintf('%s Processing\n',datestr(datetime));
-outputTiffFile = [output_folder '/Image.tiff'];
-yOCTProcessTiledScan(...
-    volumeOutputFolder, ... Input
-    {outputTiffFile},... Save only Tiff file as folder will be generated after smoothing
-    'focusPositionInImageZpix', focusPositionInImageZpix,... No Z scan filtering
-    'focusSigma',focusSigma,...
-    'dispersionQuadraticTerm',dispersionQuadraticTerm,... Use default
-    'interpMethod','sinc5', ...
-    'v',true);
+if ~skipProcessing
+    if exist(volumeOutputFolder, 'dir')  % Check if the scan data exists
+        enableCropping = false;  % Set to true to enable cropping, false to disable
+        fprintf('%s Processing\n', datestr(datetime));
+        outputTiffFile = [output_folder '/Image.tiff'];
+        yOCTProcessTiledScan(...
+            volumeOutputFolder, ... Input
+            {outputTiffFile},... Save only Tiff file as folder will be generated after smoothing
+            'focusPositionInImageZpix', focusPositionInImageZpix,... No Z scan filtering
+            'focusSigma',focusSigma,...
+            'dispersionQuadraticTerm',dispersionQuadraticTerm,... Use default
+            'cropZAroundFocusArea', enableCropping, ...
+            'interpMethod','sinc5', ...
+            'v',true);
+    else
+        fprintf('%s Processing skipped as no scan data available\n', datestr(datetime));
+    end
+else
+    fprintf('%s Processing is disabled. Change skipProcessing to false to enable.\n', datestr(datetime));
+end
