@@ -24,10 +24,10 @@ dimOneTile = yOCTChangeDimensionsStructureUnits(dimOneTile, 'mm');
 if ~isfield(json,'xRange_mm')
     % Backward compatibility
     warning('Note, that "%s" contains an old version scan, this will be depricated by Jan 1st, 2025',tiledScanInputFolder)
-    dimOneTile.x.values = json.xOffset+json.xRange*linspace(-0.5,0.5,json.nXPixels+1); 
+    dimOneTile.x.values = json.xOffset+json.xRange*linspace(-0.5,0.5,json.nXPixels+1);
     dimOneTile.y.values = json.yOffset+json.yRange*linspace(-0.5,0.5,json.nYPixels+1);
 else
-    dimOneTile.x.values = json.xOffset+json.tileRangeX_mm*linspace(-0.5,0.5,json.nXPixels+1); 
+    dimOneTile.x.values = json.xOffset+json.tileRangeX_mm*linspace(-0.5,0.5,json.nXPixels+1);
     dimOneTile.y.values = json.yOffset+json.tileRangeY_mm*linspace(-0.5,0.5,json.nYPixels+1);
 end
 dimOneTile.x.values(end) = [];
@@ -54,8 +54,8 @@ else
     yCenters_mm = json.yCenters_mm;
 end
 
-xAll_mm = (min(xCenters_mm)+dimOneTile.x.values(1)):dx:(max(xCenters_mm)+dimOneTile.x.values(end));xAll_mm = xAll_mm(:);
-yAll_mm = (min(yCenters_mm)+dimOneTile.y.values(1)):dy:(max(yCenters_mm)+dimOneTile.y.values(end));yAll_mm = yAll_mm(:);
+xAll_mm = (min(xCenters_mm)+dimOneTile.x.values(1)):dx:(max(xCenters_mm)+dimOneTile.x.values(end)+dx);xAll_mm = xAll_mm(:);xAll_mm = xAll_mm.';
+yAll_mm = (min(yCenters_mm)+dimOneTile.y.values(1)):dy:(max(yCenters_mm)+dimOneTile.y.values(end)+dy);yAll_mm = yAll_mm(:);yAll_mm = yAll_mm.';
 zAll_mm = (min(zDepths_mm )+dimOneTile.z.values(1)):dz:(max(zDepths_mm) +dimOneTile.z.values(end));zAll_mm = zAll_mm(:);
 
 % Correct for the case of only one scan
@@ -75,7 +75,7 @@ dimOutput.x = dimOneTile.x;
 dimOutput.x.origin = 'x=0 is OCT scanner origin when xCenters=0 scan was taken';
 dimOutput.x.values = xAll_mm(:)';
 dimOutput.x.index = 1:length(dimOutput.x.values);
-dimOutput.y = dimOneTile.x;
+dimOutput.y = dimOneTile.y;
 dimOutput.y.values = yAll_mm(:)';
 dimOutput.y.index = 1:length(dimOutput.y.values);
 dimOutput.y.origin = 'y=0 is OCT scanner origin when yCenters=0 scan was taken';
