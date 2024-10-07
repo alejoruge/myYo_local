@@ -160,6 +160,8 @@ if cropZAroundFocusArea
         ) = []; 
 
     dimOutput.z.values = zAll(:)';
+else
+    zAll = dimOneTile.z.values;
 end
 
 %% Save some Y planes in a debug folder if needed
