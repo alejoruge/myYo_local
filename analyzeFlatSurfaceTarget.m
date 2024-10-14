@@ -1,42 +1,51 @@
 % This script calibrates optical path correction.
-% Be sure to scan a flat surface using scanTarget function
+% Be sure to scan a flat surface
 
 %% Inputs
 %experimentPath = s3SubjectPath('2019-11-30 Imaging Flat Surface On Motorized Stage','',true);
-experimentPath = s3SubjectPath('2021-07-21 Imaging Flat Surface On Optic Table','',true);
+experimentPath = 'C:\Users\Alejo\Desktop\Iron\' % Directory for the flat surface like iron
 
-json = awsReadJSON([experimentPath 'ScanInfo.json']);
+json = awsReadJSON([experimentPath 'OCTVolume\ScanInfo.json']);
 
 isLoadOCTVolumeToPresentUser = true; % Set to false for faster execution, without loading OCT volume.
 
 %% Pre-processing #1 compute interface position
 for sI = 1:length(json.octFolders)
-    octPath = awsModifyPathForCompetability([experimentPath json.octFolders{sI} '/']);
+    octPath = awsModifyPathForCompetability([experimentPath 'OCTVolume\' json.octFolders{sI} '\']);
     
     if ~awsExist([octPath 'interfaceZPositions.mat'])
         fprintf('%s Finding Interface Z Position... (%d of %d)\n',datestr(datetime),sI,length(json.octFolders));
-        
-        % Load scan Abs and dimensions
-        [scanAbs,dim] = yOCTFromTif([octPath 'scanAbs.tif']);
-        
-        % z dimensions
-        minZ = 20;
-        z = dim.z.values(minZ:end); %[um]
 
-        % Compute interface position by looking for max
-        [~,interfaceZ] = max(scanAbs(minZ:end,:,:),[],1);
-        interfaceZ = z(shiftdim(squeeze(interfaceZ),1)); %um (y,x)
+        % Load the image data
+        [data, metadata, clim] = yOCTFromTif([experimentPath 'Image.tif']);
+        [zSize, xSize, ySize] = size(data);
+
+        % z dimensions
+        minZ = 80;
+        z = minZ:zSize;
+        data = data(minZ:end, :, :);
+
+        % Compute interface position by looking for max value along z-axis
+        [~, interfaceZ] = max(data, [], 1);
+        interfaceZ = squeeze(interfaceZ) + minZ - 1; % Adjust index to original z reference
+
+        % Define dimensions
+        dim.x.values = 1:xSize;
+        dim.y.values = 1:ySize;
+        dim.z.values = minZ:zSize;
 
         % Save output results along side with dimensions
         yOCT2Mat(interfaceZ,[octPath 'interfaceZPositions.mat'],dim);
-    end 
+        
+    end
 end
+
 
 %% Pre-processing #2 fit a polynomial to all
 mdl = @(x,y,a)(a(1) + a(2)*x + a(3)*y + a(4)*x.^2 + a(5)*y.^2 + a(6)*x.*y);
 fprintf('%s Fit polynomials... \n',datestr(datetime));
 for sI = 1:length(json.octFolders)
-    octPath = awsModifyPathForCompetability([experimentPath json.octFolders{sI} '/']);
+    octPath = awsModifyPathForCompetability([experimentPath 'OCTVolume\' json.octFolders{sI} '\']);
     
     % Load data
     [interfaceZ,dim] = yOCTFromMat([octPath 'interfaceZPositions.mat']);
@@ -87,6 +96,55 @@ for sI = 1:length(json.octFolders)
     fit.yPeak = yPeak;
     fit.yPeakI = yPeakI;
     awsWriteJSON(fit,[experimentPath 'interfaceZPositions_PolyFit.json']);
+
+    %% ESTO SE BORRA:
+    % Load the image data
+    [data, metadata, clim] = yOCTFromTif([experimentPath 'Image.tif']);
+    [zSize, xSize, ySize] = size(data);
+
+    % Create a new .tif file with gradient at interface positions
+    gradientImage = zeros(zSize, xSize, ySize, 'uint8');
+    for xIdx = 1:xSize
+        for yIdx = 1:ySize
+            zIdx = interfaceZ_med(yIdx, xIdx);
+            if zIdx + 10 <= zSize
+                gradientImage(zIdx:zIdx + 9, xIdx, yIdx) = linspace(255, 0, 10);
+            else
+                gradientImage(zIdx:zSize, xIdx, yIdx) = linspace(255, 0, zSize - zIdx + 1);
+            end
+        end
+    end
+    
+    % Use Tiff object to save the gradient image as a .tif file
+    tiffFile = Tiff([octPath 'GradientInterfacePositions.tif'], 'w');
+    
+    % Set the tag properties for the Tiff file
+    tagstruct.ImageLength = ySize; % Height of the image (y-axis)
+    tagstruct.ImageWidth = xSize;  % Width of the image (x-axis)
+    tagstruct.Photometric = Tiff.Photometric.MinIsBlack;
+    tagstruct.BitsPerSample = 8;
+    tagstruct.SamplesPerPixel = 1;
+    tagstruct.RowsPerStrip = 16;
+    tagstruct.PlanarConfiguration = Tiff.PlanarConfiguration.Chunky;
+    tagstruct.Software = 'MATLAB';
+    
+    % Write each slice (z-dimension) to the TIFF file
+    for i = 1:zSize
+        tiffFile.setTag(tagstruct);
+        
+        % Extract the i-th slice as a 2D matrix
+        currentSlice = squeeze(gradientImage(i, :, :));
+        
+        tiffFile.write(currentSlice);  % Write the 2D slice
+        if i < zSize
+            tiffFile.writeDirectory();  % Move to the next slice (directory)
+        end
+    end
+    
+    % Close the Tiff file
+    tiffFile.close();
+
+%% HASTA AQUI
     
     %% Plot fit & save
     f = figure(sI);
@@ -143,7 +201,7 @@ for sI = 1:length(json.octFolders)
     subplot(2,2,3);
     if isLoadOCTVolumeToPresentUser
         if ~exist('scanY','var') || true
-            scanY = yOCTFromTif([octPath 'scanAbs.tif'],'yI',yPeakI);
+            scanY = yOCTFromTif([octPath 'Image.tif'],'yI',yPeakI);
         end
         imagesc(x,z,scanY);
         hold on;
@@ -160,14 +218,13 @@ for sI = 1:length(json.octFolders)
     ylabel('z[\mum]');
     pause(0.1);
     
-    saveas(f,'interfaceZPositions_PolyFit.png');
+    saveas(f, 'interfaceZPositions_PolyFit.png');
     awsCopyFileFolder('interfaceZPositions_PolyFit.png',experimentPath);
 end
 
 %% Compate oct probe calibration
 fprintf('%s Compare Flat Surface to Probe Calibration... \n',datestr(datetime));
-octPath = awsModifyPathForCompetability([experimentPath json.octFolders{1} '/']);
-
+octPath = awsModifyPathForCompetability([experimentPath 'OCTVolume\' json.octFolders{1} '\']);
 if ~exist('xx','var')
     [interfaceZ,dim] = yOCTFromMat([octPath 'interfaceZPositions.mat']);
     x = dim.x.values; %um
@@ -177,7 +234,7 @@ if ~exist('xx','var')
 end
 
 % Compute difference
-pf = awsReadJSON([octPath '../interfaceZPositions_PolyFit.json']);
+pf = awsReadJSON([experimentPath 'interfaceZPositions_PolyFit.json']);
 p = pf.p;
 p_ref = json.octProbe.OpticalPathCorrectionPolynomial;
 d = mdl(xx,yy,p) - mdl(xx,yy,[0;p_ref]);
