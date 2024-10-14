@@ -42,7 +42,7 @@ end
 
 
 %% Pre-processing #2 fit a polynomial to all
-mdl = @(x,y,a)(a(1) + a(2)*x + a(3)*y + a(4)*x.^2 + a(5)*y.^2 + a(6)*x.*y);
+mdl = @(x,y,a)(a(1)*x + a(2)*y + a(3)*x.^2 + a(4)*y.^2 + a(5)*x.*y);
 fprintf('%s Fit polynomials... \n',datestr(datetime));
 for sI = 1:length(json.octFolders)
     octPath = awsModifyPathForCompetability([experimentPath 'OCTVolume\' json.octFolders{sI} '\']);
@@ -57,7 +57,7 @@ for sI = 1:length(json.octFolders)
     
     %% Fit 2D polynomial (least squares)
     [xx,yy] = meshgrid(x,y);
-    A = [ones(numel(xx),1) xx(:) yy(:) xx(:).^2 yy(:).^2 xx(:).*yy(:)];
+    A = [xx(:) yy(:) xx(:).^2 yy(:).^2 xx(:).*yy(:)];
     
     % Get rid of obvious outliers, those who are very far for median
     interfaceZ_med = medfilt2(interfaceZ,[50 50],'symmetric');
@@ -71,25 +71,23 @@ for sI = 1:length(json.octFolders)
     % Fit without the outliers
     a =  A(~isOutlier,:)\interfaceZ(~isOutlier); %Polynomial values
 
-    % Print coefients
+    % Print coefficients
     fprintf('\n');
     fprintf('# Z Correction (microns) Polynomial for correcting optical path.\n')
     fprintf('# Coefficients are [x y x^2 y^2 x*y] where x,y are positions in microns.\n')
-    fprintf('OpticalPathCorrectionPolynomial = [%.4e, %.4e, %.4e, %.4e, %.4e]\n',a(2:end));
-    fprintf('a0 Component: %.1f[um]\n',a(1));
-    fprintf('\n');
+    fprintf('OpticalPathCorrectionPolynomial = [%.4e, %.4e, %.4e, %.4e, %.4e]\n',a);
     
     %% Figure out peak positions and Save
     % Peak Position
-    xPeak = -a(2)/(2*a(4));
-    yPeak = -a(3)/(2*a(5));
+    xPeak = -a(1)/(2*a(3));
+    yPeak = -a(2)/(2*a(4));
 
     % Index of Peak Position
     [~,yPeakI] = min(abs(yPeak-y));
     [~,xPeakI] = min(abs(xPeak-x));
 
     % Save parameters
-    fit.info = 'interfaceZ uints is (um), dimentions are y(um),x(um). p(1)+p(2)*x+p(3)*y+p(4)*x^2+p(5)*y^2+p(6)*x*y';
+    fit.info = 'interfaceZ units is (um), dimensions are y(um),x(um). p(1)*x + p(2)*y + p(3)*x^2 + p(4)*y^2 + p(5)*x*y';
     fit.p = a;
     fit.xPeak = xPeak;
     fit.xPeakI = xPeakI;
@@ -97,55 +95,6 @@ for sI = 1:length(json.octFolders)
     fit.yPeakI = yPeakI;
     awsWriteJSON(fit,[experimentPath 'interfaceZPositions_PolyFit.json']);
 
-    %% ESTO SE BORRA:
-    % Load the image data
-    [data, metadata, clim] = yOCTFromTif([experimentPath 'Image.tif']);
-    [zSize, xSize, ySize] = size(data);
-
-    % Create a new .tif file with gradient at interface positions
-    gradientImage = zeros(zSize, xSize, ySize, 'uint8');
-    for xIdx = 1:xSize
-        for yIdx = 1:ySize
-            zIdx = interfaceZ_med(yIdx, xIdx);
-            if zIdx + 10 <= zSize
-                gradientImage(zIdx:zIdx + 9, xIdx, yIdx) = linspace(255, 0, 10);
-            else
-                gradientImage(zIdx:zSize, xIdx, yIdx) = linspace(255, 0, zSize - zIdx + 1);
-            end
-        end
-    end
-    
-    % Use Tiff object to save the gradient image as a .tif file
-    tiffFile = Tiff([octPath 'GradientInterfacePositions.tif'], 'w');
-    
-    % Set the tag properties for the Tiff file
-    tagstruct.ImageLength = ySize; % Height of the image (y-axis)
-    tagstruct.ImageWidth = xSize;  % Width of the image (x-axis)
-    tagstruct.Photometric = Tiff.Photometric.MinIsBlack;
-    tagstruct.BitsPerSample = 8;
-    tagstruct.SamplesPerPixel = 1;
-    tagstruct.RowsPerStrip = 16;
-    tagstruct.PlanarConfiguration = Tiff.PlanarConfiguration.Chunky;
-    tagstruct.Software = 'MATLAB';
-    
-    % Write each slice (z-dimension) to the TIFF file
-    for i = 1:zSize
-        tiffFile.setTag(tagstruct);
-        
-        % Extract the i-th slice as a 2D matrix
-        currentSlice = squeeze(gradientImage(i, :, :));
-        
-        tiffFile.write(currentSlice);  % Write the 2D slice
-        if i < zSize
-            tiffFile.writeDirectory();  % Move to the next slice (directory)
-        end
-    end
-    
-    % Close the Tiff file
-    tiffFile.close();
-
-%% HASTA AQUI
-    
     %% Plot fit & save
     f = figure(sI);
     set(f,'units','normalized','outerposition',[0 0 1 1]);
@@ -160,14 +109,14 @@ for sI = 1:length(json.octFolders)
     plot(xPeak,yPeak,'+b');
     plot(x([1 end]),yPeak*[1 1],'--b');
     plot(xPeak*[1 1],y([1 end]),'--b');
-    text(xPeak,yPeak,sprintf('Peak Point\n(%.0f\\mum,%.0f\\mum)',xPeak,yPeak));
+    text(xPeak,yPeak,sprintf('Peak Point\n(%.0f\mum,%.0f\mum)',xPeak,yPeak));
     hold off;
     xlabel('x[\mum]');
     ylabel('y[\mum]');
     [~,probeName] = fileparts(json.octProbePath);
-    title(sprintf('Interface Depth (Data) [\\mum] (%s)',probeName));
+    title(sprintf('Interface Depth (Data) [\mum] (%s)',probeName));
     grid on;
-    legend(sprintf('Polyfit: %.0f+%.1ex+%.1ey+%.1ex^2+%.1ey^2+%.1exy',a(1),a(2),a(3),a(4),a(5),a(6)),...
+    legend(sprintf('Polyfit: %.1ex + %.1ey + %.1ex^2 + %.1ey^2 + %.1exy',a(1),a(2),a(3),a(4),a(5)),...
         'location','south')
 
     subplot(2,2,2);
@@ -290,7 +239,7 @@ if length(json.octFolders) > 1
     axis equal;
     xlabel('x[\mum]');
     ylabel('y[\mum]');
-    title('Differene between Different Depths After Removing Mean [\mum]');
+    title('Difference between Different Depths After Removing Mean [\mum]');
     colorbar;
     grid on;
     subplot(2,2,2);
@@ -299,7 +248,7 @@ if length(json.octFolders) > 1
     plot(zTmp,m-p(2),'o',zTmp,polyval(p,zTmp)-p(2),'--');
     xlabel('Relative Focus Position Depth [\mum]');
     ylabel('Mean Difference Between Calibrations [\mum]');
-    legend('Data',sprintf('=%.3f\\cdotz',p(1)),'Location','South')
+    legend('Data',sprintf('=%.3f\cdotz',p(1)),'Location','South')
     grid on;
     axis ij
     
