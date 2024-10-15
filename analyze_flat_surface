@@ -18,17 +18,47 @@ function correct_full_volume()
         [~, maxZIndicesY(x)] = max(data(:, x, 250));
     end
     
+    
+    %% Hacerle gradiante a los puntos:
+
+    windowSize = 3; % Tamaño de la ventana para la mediana móvil
+    halfWindow = floor(windowSize / 2); % La mitad de la ventana, para centrarla en el punto actual
+    
+    % Copiar los índices originales para compararlos luego
+    correctedZIndicesX = maxZIndicesX; % Hacer una copia para corregir
+    correctedZIndicesY = maxZIndicesY; % Hacer una copia para corregir
+    
+    % Corrección para X
+    for y = (1+halfWindow):(length(maxZIndicesX)-halfWindow) % Ajustar los bordes
+        window = maxZIndicesX((y-halfWindow):(y+halfWindow)); % Ventana centrada en y
+        medianValue = median(window); % Mediana de la ventana
+        if abs(maxZIndicesX(y) - medianValue) > 50 % Umbral de outlier
+            correctedZIndicesX(y) = medianValue;
+        end
+    end
+    
+    % Corrección para Y
+    for x = (1+halfWindow):(length(maxZIndicesY)-halfWindow) % Ajustar los bordes
+        window = maxZIndicesY((x-halfWindow):(x+halfWindow)); % Ventana centrada en x
+        medianValue = median(window); % Mediana de la ventana
+        if abs(maxZIndicesY(x) - medianValue) > 50 % Umbral de outlier
+            correctedZIndicesY(x) = medianValue;
+        end
+    end
+
+    %% ACABA GRADIANTE
+
     % Ajuste polinómico de grado 5
-    pX250 = polyfit(1:ySize, maxZIndicesX, 5);
-    pY250 = polyfit(1:xSize, maxZIndicesY, 5);
+    pX250 = polyfit(1:ySize, correctedZIndicesX, 5);
+    pY250 = polyfit(1:xSize, correctedZIndicesY, 5);
     
     % Guardar los polinomios en un archivo JSON
     polynomialData.info = 'interfaceZ units is (um), dimensions are y(um),x(um). p(1)+p(2)*x+p(3)*y+p(4)*x^2+p(5)*y^2+p(6)*x*y';
     polynomialData.p = [pX250, pY250];
-    polynomialData.xPeak = max(maxZIndicesY);
-    polynomialData.xPeakI = find(maxZIndicesY == max(maxZIndicesY), 1);
-    polynomialData.yPeak = max(maxZIndicesX);
-    polynomialData.yPeakI = find(maxZIndicesX == max(maxZIndicesX), 1);
+    polynomialData.xPeak = max(correctedZIndicesX);
+    polynomialData.xPeakI = find(correctedZIndicesX == max(correctedZIndicesX), 1);
+    polynomialData.yPeak = max(correctedZIndicesY);
+    polynomialData.yPeakI = find(correctedZIndicesY == max(correctedZIndicesY), 1);
     
     jsonFilePath = fullfile(fileparts(tifFilePath), 'polynomialCoefficients.json');
     fid = fopen(jsonFilePath, 'w');
