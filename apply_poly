@@ -1,0 +1,42 @@
+apply_polynomial_correction('C:\Image.tif', 'C:\polynomialCoefficients.json');
+
+
+function apply_polynomial_correction(imageFilePath, jsonFilePath)
+    if nargin < 2
+        error('Not enough input arguments. Please provide both imageFilePath and jsonFilePath.');
+    end
+
+    % Cargar los polinomios desde el archivo JSON
+    fid = fopen(jsonFilePath, 'r');
+    raw = fread(fid, inf);
+    fclose(fid);
+    jsonData = jsondecode(char(raw'));
+    
+    pX250 = jsonData.p(1:6); % Coeficientes para el ajuste en X
+    pY250 = jsonData.p(7:12); % Coeficientes para el ajuste en Y
+    
+    % Cargar datos usando yOCTFromTif
+    [data, ~, ~] = yOCTFromTif(imageFilePath);
+    [zSize, xSize, ySize] = size(data);
+    
+    % Preparar una superficie basada en los polinomios
+    [X, Y] = meshgrid(1:xSize, 1:ySize);
+    Z_pred = polyval(pX250, Y) + polyval(pY250, X); % Combina polinomios
+
+    % Aplicar la corrección a cada punto
+    correctedData = zeros(size(data), 'like', data);
+    
+    for x = 1:xSize
+        for y = 1:ySize
+            zShift = round(Z_pred(y, x) - Z_pred(250, 250)); % Desplazamiento basado en el centro
+            correctedData(:, x, y) = circshift(data(:, x, y), -zShift); % Ajusta usando circshift
+        end
+    end
+    
+    % Directorio para guardar el nuevo archivo
+    folderPath = fileparts(imageFilePath);
+    
+    % Guardar los datos corregidos usando yOCT2Tif
+    yOCT2Tif(correctedData, fullfile(folderPath, 'CorrectedVolume.tif'));
+    fprintf('El volumen completo de curvatura corregido se ha guardado en %s\n', fullfile(folderPath, 'CorrectedVolume.tif'));
+end
