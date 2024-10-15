@@ -1,0 +1,60 @@
+function correct_full_volume()
+    % Camino al archivo TIF
+    tifFilePath = 'C:\Users\Alejo\Desktop\Iron\new_attempt\Image.tif';
+
+    % Cargar datos usando yOCTFromTif
+    [data, ~, ~] = yOCTFromTif(tifFilePath);
+    [zSize, xSize, ySize] = size(data);
+    
+    % Preparar matrices para los valores de Z máximos en X=250 y Y=250
+    maxZIndicesX = zeros(1, ySize);
+    maxZIndicesY = zeros(1, xSize);
+
+    % Calcular los índices Z de máxima intensidad para X=250 y Y=250
+    for y = 1:ySize
+        [~, maxZIndicesX(y)] = max(data(:, 250, y));
+    end
+    for x = 1:xSize
+        [~, maxZIndicesY(x)] = max(data(:, x, 250));
+    end
+    
+    % Ajuste polinómico de grado 5
+    pX250 = polyfit(1:ySize, maxZIndicesX, 5);
+    pY250 = polyfit(1:xSize, maxZIndicesY, 5);
+    
+    % Guardar los polinomios en un archivo JSON
+    polynomialData.info = 'interfaceZ units is (um), dimensions are y(um),x(um). p(1)+p(2)*x+p(3)*y+p(4)*x^2+p(5)*y^2+p(6)*x*y';
+    polynomialData.p = [pX250, pY250];
+    polynomialData.xPeak = max(maxZIndicesY);
+    polynomialData.xPeakI = find(maxZIndicesY == max(maxZIndicesY), 1);
+    polynomialData.yPeak = max(maxZIndicesX);
+    polynomialData.yPeakI = find(maxZIndicesX == max(maxZIndicesX), 1);
+    
+    jsonFilePath = fullfile(fileparts(tifFilePath), 'polynomialCoefficients.json');
+    fid = fopen(jsonFilePath, 'w');
+    fprintf(fid, '%s', jsonencode(polynomialData));
+    fclose(fid);
+    
+    fprintf('Los polinomios se han guardado en %s\n', jsonFilePath);
+    
+    % Preparar una superficie basada en los polinomios
+    [X, Y] = meshgrid(1:xSize, 1:ySize);
+    Z_pred = polyval(pX250, Y) + polyval(pY250, X); % Combina polinomios
+
+    % Aplicar la corrección a cada punto
+    correctedData = zeros(size(data), 'like', data);
+    
+    for x = 1:xSize
+        for y = 1:ySize
+            zShift = round(Z_pred(y, x) - Z_pred(250, 250)); % Desplazamiento basado en el centro
+            correctedData(:, x, y) = circshift(data(:, x, y), -zShift); % Ajusta usando circshift
+        end
+    end
+    
+    % Directorio para guardar el nuevo archivo
+    folderPath = fileparts(tifFilePath);
+    
+    % Guardar los datos corregidos usando yOCT2Tif
+    yOCT2Tif(correctedData, fullfile(folderPath, 'CorrectedVolume.tif'));
+    fprintf('El volumen completo de curvatura corregido se ha guardado en %s\n', fullfile(folderPath, 'CorrectedVolume.tif'));
+end
