@@ -1,6 +1,6 @@
 function correct_full_volume()
     % Camino al archivo TIF
-    tifFilePath = 'C:\Users\Alejo\Desktop\Iron\new_attempt\Image.tif';
+    tifFilePath = '\';
 
     % Cargar datos usando yOCTFromTif
     [data, ~, ~] = yOCTFromTif(tifFilePath);
