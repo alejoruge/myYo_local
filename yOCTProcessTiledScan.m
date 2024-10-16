@@ -221,11 +221,7 @@ parfor yI=1:length(dimOutput.y.values)
                 for i=length(size(scan1)):-1:3 %Average BScan Averages, A Scan etc
                     scan1 = squeeze(mean(scan1,i));
                 end
-                
-                % if (in.applyPathLengthCorrection && isfield(json.octProbe,'OpticalPathCorrectionPolynomial'))
-                %     [scan1, scan1ValidDataMap] = yOCTOpticalPathCorrection(scan1, dimOneTile, json);
-                % end
-
+                             
                 scan1_nan = isnan(scan1);
                 scan1(scan1_nan) = 0; % Interpolated NaN values should not contribute to image
                 scan1ValidDataMap = ~scan1_nan;
