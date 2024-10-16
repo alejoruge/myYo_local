@@ -222,10 +222,15 @@ parfor yI=1:length(dimOutput.y.values)
                     scan1 = squeeze(mean(scan1,i));
                 end
                 
-                if (in.applyPathLengthCorrection && isfield(json.octProbe,'OpticalPathCorrectionPolynomial'))
-                    [scan1, scan1ValidDataMap] = yOCTOpticalPathCorrection(scan1, dimOneTile, json);
-                end
-                
+                % if (in.applyPathLengthCorrection && isfield(json.octProbe,'OpticalPathCorrectionPolynomial'))
+                %     [scan1, scan1ValidDataMap] = yOCTOpticalPathCorrection(scan1, dimOneTile, json);
+                % end
+
+                scan1_nan = isnan(scan1);
+                scan1(scan1_nan) = 0; % Interpolated NaN values should not contribute to image
+                scan1ValidDataMap = ~scan1_nan;
+
+
                 % Filter around the focus
                 zI = 1:length(dimOneTile.z.values); zI = zI(:);
                 if ~isnan(focusPositionInImageZpix(zzI))
@@ -364,10 +369,16 @@ if isSaveSomeYPlanes
     end
     awsCopyFile_MW2(yPlanesOutputFolder);
 end
+
+% Apply Optical Path Correction for 40x OCT
+
+if (in.applyPathLengthCorrection && isfield(json.octProbe,'OpticalPathCorrectionPolynomial'))
+    yOCTOpticalPathCorrection(json, outputPath);
+end
+
 if (v)
     fprintf('Done! took %.1f[min]\n',toc(tt)/60);
 end
-
 
 function cnt = yOCTProcessTiledScan_AuxCountHowManyYFiles(whereAreMyFiles)
 % This is an aux function that counts how many files yOCT2Tif saved 
