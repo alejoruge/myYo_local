@@ -72,6 +72,7 @@ correctedScan = zeros(size(inputScan));
 
 %% Change dimensions to microns units
 inputScanDimensions = yOCTChangeDimensionsStructureUnits(inputScanDimensions,'microns');
+zPixels = 1:size(inputScanDimensions.z.values, 2);
 
 %% Iterate through the inputScan volume and apply optical path correction to each individual scan 
 for i=1:size(inputScan,3)
@@ -80,8 +81,8 @@ for i=1:size(inputScan,3)
     scan = squeeze(inputScan(:,:,i));
     
     %Lens abberation / optical path correction
-    correction = @(x,y)(x*OP_p(1)+y*OP_p(2)+x.^2*OP_p(3)+y.^2*OP_p(4)+x.*y*OP_p(5)); %x,y are in microns
-    [xx,zz] = meshgrid(inputScanDimensions.x.values,inputScanDimensions.z.values); %um                
+    correction = @(x,y)(x*OP_p(1)+y*OP_p(2)+x.^2*OP_p(3)+y.^2*OP_p(4)+x.*y*OP_p(5)); %x,y are in microns             
+    [xx,zz] = meshgrid(inputScanDimensions.x.values,zPixels); %um   
     scan_min = min(scan(:));
     scan = interp2(xx,zz,scan,xx,zz+correction(xx,inputScanDimensions.y.values(i)),'nearest');
     scan_nan = isnan(scan);
